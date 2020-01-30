@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"go-api/utils"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 func get(w http.ResponseWriter, r *http.Request) {
@@ -64,8 +66,18 @@ func params(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"userID": %d, "commentID": %d, "location": "%s" }`, userID, commentID, location)))
 }
 
+func init() {
+	err := godotenv.Load("./config/.env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+}
+
 func main() {
 	r := mux.NewRouter()
+
+	value := utils.EnvVariable("name")
+	fmt.Printf("os package: %s = %s \n", "name", value)
 
 	api := r.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("", get).Methods(http.MethodGet)
