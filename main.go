@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"go-api/utils"
+	utils "go-api/utils"
 	"log"
 	"net/http"
 	"strconv"
@@ -78,7 +78,7 @@ func main() {
 
 	value := utils.EnvVariable("name")
 	fmt.Printf("os package: %s = %s \n", "name", value)
-
+	utils.Connect("aaa")
 	api := r.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("", get).Methods(http.MethodGet)
 	api.HandleFunc("", post).Methods(http.MethodPost)
