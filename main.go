@@ -1,69 +1,122 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	utils "go-api/utils"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/joho/godotenv"
 )
 
-func get(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "get called"}`))
+type TempHumValue struct {
+	gorm.Model
+	Temp     float32
+	Humidity float32
 }
 
-func post(w http.ResponseWriter, r *http.Request) {
+// func params(w http.ResponseWriter, r *http.Request) {
+// 	pathParams := mux.Vars(r)
+// 	w.Header().Set("Content-Type", "application/json")
+
+// 	userID := -1
+// 	var err error
+// 	if val, ok := pathParams["userID"]; ok {
+// 		userID, err = strconv.Atoi(val)
+// 		if err != nil {
+// 			w.WriteHeader(http.StatusInternalServerError)
+// 			w.Write([]byte(`{"message": "need a number"}`))
+// 			return
+// 		}
+// 	}
+
+// 	commentID := -1
+// 	if val, ok := pathParams["commentID"]; ok {
+// 		commentID, err = strconv.Atoi(val)
+// 		if err != nil {
+// 			w.WriteHeader(http.StatusInternalServerError)
+// 			w.Write([]byte(`{"message": "need a number"}`))
+// 			return
+// 		}
+// 	}
+
+// 	query := r.URL.Query()
+// 	location := query.Get("location")
+
+// 	w.Write([]byte(fmt.Sprintf(`{"userID": %d, "commentID": %d, "location": "%s" }`, userID, commentID, location)))
+// }
+
+func store(w http.ResponseWriter, r *http.Request) {
+
+	println(time.Now().Format("2006-01-02 15:04:05"))
+	println("Request:", r.URL.RequestURI())
+	println("Method:", r.Method)
+	println("")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(`{"message": "post called"}`))
-}
+	message := "Values failed to stored"
 
-func put(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte(`{"message": "put called"}`))
-}
+	db, err := gorm.Open(os.Getenv("DBDRIVER"), os.Getenv("DBNAME"))
+	if err != nil {
+		message = "failed to connect database"
+		w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, message)))
+		println("PANIC")
+		panic(message)
+	}
+	defer db.Close()
 
-func delete(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "delete called"}`))
-}
+	temp, err := strconv.ParseFloat(r.FormValue("temp"), 2)
+	hum, err2 := strconv.ParseFloat(r.FormValue("humidity"), 2)
 
-func params(w http.ResponseWriter, r *http.Request) {
-	pathParams := mux.Vars(r)
-	w.Header().Set("Content-Type", "application/json")
-
-	userID := -1
-	var err error
-	if val, ok := pathParams["userID"]; ok {
-		userID, err = strconv.Atoi(val)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message": "need a number"}`))
-			return
-		}
+	if err == nil && err2 == nil {
+		db.Create(&TempHumValue{Temp: float32(temp), Humidity: float32(hum)})
+		//println("Values stored")
+		message = "Values stored"
 	}
 
-	commentID := -1
-	if val, ok := pathParams["commentID"]; ok {
-		commentID, err = strconv.Atoi(val)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"message": "need a number"}`))
-			return
-		}
+	w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, message)))
+}
+
+func getValues(w http.ResponseWriter, r *http.Request) {
+
+	println(time.Now().Format("2006-01-02 15:04:05"))
+	println("Request:", r.URL.RequestURI())
+	println("Method:", r.Method)
+	println("")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	message := ""
+
+	db, err := gorm.Open(os.Getenv("DBDRIVER"), os.Getenv("DBNAME"))
+	if err != nil {
+		message = "failed to connect database"
+		println("PANIC")
+		panic(message)
 	}
+	defer db.Close()
 
-	query := r.URL.Query()
-	location := query.Get("location")
+	vals := []TempHumValue{}
+	db.Find(&vals)
 
-	w.Write([]byte(fmt.Sprintf(`{"userID": %d, "commentID": %d, "location": "%s" }`, userID, commentID, location)))
+	message = fmt.Sprintf(`%d records found`, len(vals))
+
+	responce, err := json.Marshal(vals)
+	if err != nil {
+		fmt.Println(err)
+		message = err.Error()
+		return
+	}
+	//fmt.Println(string(responce))
+
+	w.Write([]byte(fmt.Sprintf(`{"message": "%s","data": %s}`, message, responce)))
 }
 
 func init() {
@@ -71,21 +124,39 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
+
+	db, err := gorm.Open(os.Getenv("DBDRIVER"), os.Getenv("DBNAME"))
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+
+	// Migrate the schema
+	db.AutoMigrate(&TempHumValue{})
 }
 
 func main() {
 	r := mux.NewRouter()
 
-	value := utils.EnvVariable("name")
-	fmt.Printf("os package: %s = %s \n", "name", value)
-	utils.Connect("aaa")
 	api := r.PathPrefix("/api/v1").Subrouter()
-	api.HandleFunc("", get).Methods(http.MethodGet)
-	api.HandleFunc("", post).Methods(http.MethodPost)
-	api.HandleFunc("", put).Methods(http.MethodPut)
-	api.HandleFunc("", delete).Methods(http.MethodDelete)
+	//api.HandleFunc("", get).Methods(http.MethodGet)
+	//api.HandleFunc("", post).Methods(http.MethodPost)
+	//api.HandleFunc("", put).Methods(http.MethodPut)
+	//api.HandleFunc("", delete).Methods(http.MethodDelete)
+	//api.HandleFunc("/user/{userID}/comment/{commentID}", params).Methods(http.MethodGet)
 
-	api.HandleFunc("/user/{userID}/comment/{commentID}", params).Methods(http.MethodGet)
+	api.HandleFunc("/store", store).Methods(http.MethodPost)
+	api.HandleFunc("/read", getValues).Methods(http.MethodGet)
+
+	println("")
+	println("================================")
+	println("Server started on port 8080")
+	println("and is running in the following URL:")
+	println("http://localhost:8080/api/v1/")
+	println("================================")
+	println("")
+	println("")
 
 	log.Fatal(http.ListenAndServe(":8080", r))
+
 }
